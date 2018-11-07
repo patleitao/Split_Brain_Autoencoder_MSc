@@ -1,22 +1,14 @@
-from keras.datasets import cifar10, mnist
 from matplotlib import pyplot as plt
 from scipy.misc import toimage
 import numpy as np
-from keras.datasets import cifar10
+import keras
+from keras import optimizers
 from keras.layers import *
 from keras.models import Model
 from keras.constraints import maxnorm
-from keras import optimizers
-from keras.layers.convolutional import Conv2D
-from keras.layers.convolutional import MaxPooling2D
-from keras.utils import np_utils
-from keras import backend as K
-from keras.callbacks import TensorBoard
-from file_reader import *
 from utils import *
-import keras
 
-# define reasonable defaults
+
 batch_size = 25
 dropout = 0.3
 verbose = True
@@ -40,7 +32,7 @@ optimizer = optimizers.SGD(lr =lrate, decay=decay, momentum = momentum, nesterov
 default_callbacks = [keras.callbacks.TerminateOnNaN()]
 
 
-class Hemisphere(object):
+class Autoencoder(object):
 	
 	def __init__(self,input_data, output_data,test_input, test_output, batch_size = batch_size, dropout = dropout, verbose = verbose, architecture = architecture, activation = activation, padding = padding, optimizer = optimizer, epochs = epochs, loss=loss):
 
@@ -58,8 +50,6 @@ class Hemisphere(object):
 		self.optimizer = optimizer
 		self.epochs = epochs
 		self.loss = loss
-
-		self.shape = input_data.shape
 		#assert self.shape == output_data.shape, 'input and output data do not have the same shape'
 
 		if architecture is not None:
@@ -67,11 +57,10 @@ class Hemisphere(object):
 			raise NotImplementedError
 			pass
 		if architecture is None:
-				
-			if verbose:
-				print self.shape
 			
-			input_img = Input(shape=(self.shape[1], self.shape[2], self.shape[3]))
+
+			input_shape = self.input_data.shape[1:]
+			input_img = Input(shape=(input_shape))
 
 			x = Conv2D(16, (3, 3), activation=self.activation, padding=self.padding)(input_img)
 			if verbose:
@@ -136,11 +125,11 @@ class Hemisphere(object):
 			self.model.compile(optimizer = self.optimizer, loss = self.loss)
 
 
-	def train(self, epochs = None, shuffle=True, callbacks = None, get_weights=False):
+	def train(self, epochs = None, shuffle=True, callbacks = default_callbacks, get_weights=False):
 		if epochs is None:
 			epochs = self.epochs
 		print "Model training:"
-		history = self.model.fit(self.input_data, self.output_data, epochs=epochs, shuffle = shuffle, callbacks = callbacks)
+		history = self.model.fit(self.input_data, self.output_data, epochs=epochs, shuffle = shuffle, callbacks = callback, validation_split=0.08)
 		print "Training complete"
 		if get_weights:
 			weights, biases= self.model.layers[-2].get_weights()
@@ -161,8 +150,7 @@ class Hemisphere(object):
 		if inputs is None:
 			inputs = self.test_output
 
-		print preds.shape
-		shape = (preds.shape[1],preds.shape[2])
+		shape = preds.shape[1:]
 			
 		fig = plt.figure(figsize=(20,4))
 		for i in range(N):
@@ -192,7 +180,7 @@ class Hemisphere(object):
 		if predictions is None:
 			predictions = self.predict(test_data = input_data)
 		maps = np.absolute(predictions - self.test_output)
-		assert input_data.shape == predictions.shape, 'predictoins and input data must have same dimensions'
+		assert input_data.shape == predictions.shape, 'predictions and input data must have same dimensions'
 		shape = predictions.shape
 
 		if return_preds:
@@ -231,6 +219,3 @@ class Hemisphere(object):
 		if N == -1:
 			N = len(mean_maps)
 		self.plot_error_maps(mean_maps, N)
-		
-
-		

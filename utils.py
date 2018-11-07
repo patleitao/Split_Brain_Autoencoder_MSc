@@ -6,20 +6,34 @@ import cPickle as pickle
 from skimage import exposure
 import sys
 from keras.callbacks import ModelCheckpoint, EarlyStopping, CSVLogger, TensorBoard, TerminateOnNaN, ReduceLROnPlateau
+from keras.models import model_from_json
 import os
-
+from PIL import Image
+ 
 def get_run_num():
 	if len(sys.argv)>1:
 		return sys.argv[1]
 
+def save_model(model, model_name):
+	# serialize model to JSON
+	model_json = model.to_json()
+	with open(model_name, "w") as json_file:
+		json_file.write(model_json)
+	# serialize weights to HDF5
+	model_weights_name = model_name + ".h5"
+	model.save_weights(model_weights_name)
+	return "Saved model and weights to disk"
 
-#pickle loading and saving functionality
-
-def save(obj, fname):
-	pickle.dump(obj, open(fname, 'wb'))
-
-def load(fname):
-	return pickle.load(open(fname, 'rb'))
+def load_model(model_name):
+	# load json and create model
+	json_file = open(model_name, 'r')
+	loaded_model_json = json_file.read()
+	json_file.close()
+	loaded_model = model_from_json(loaded_model_json)
+	# load weights into new model
+	model_weights_name = model_name + ".h5"
+	loaded_model.load_weights(model_weights_name)
+	return loaded_model
 
 def save_array(obj, fname):
 	pickle.dump(obj, open(fname, 'wb'))
@@ -54,6 +68,17 @@ def build_callbacks(save_path, min_delta = 1e-4, patience = 10, histogram_freq=0
 	reduceLR = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience= patience, verbose=1, mode='auto', min_lr = 1e-8)
 
 	return [checkpointer, early_stopper, epoch_logger, tensorboard, terminator, reduceLR]
+
+
+def rgb_to_bw(imgs):
+	#new_imgs = np.sum(imgs, axis=3)
+	#new_imgs = new_imgs / 3
+	new_imgs = np.array(imgs.shape)
+	new_imgs = map(lambda x: x.convert('1'), imgs)
+	return new_imgs
+
+def normalise(data):
+	return data.astype('float32')/255.0
 
 
 def calculate_variance_of_errmap(errmaps):
