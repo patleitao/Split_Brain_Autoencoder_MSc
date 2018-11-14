@@ -1,13 +1,9 @@
-from matplotlib import pyplot as plt
-from scipy.misc import toimage
-import numpy as np
 import keras
 from keras import optimizers
 from keras.layers import *
 from keras.models import Model
-from keras.constraints import maxnorm
 from utils import *
-
+import math
 
 batch_size = 25
 dropout = 0.3
@@ -27,14 +23,14 @@ loss = 'binary_crossentropy'
 
 gestalt = False
 
-optimizer = optimizers.SGD(lr =lrate, decay=decay, momentum = momentum, nesterov = nesterov)
-
-default_callbacks = [keras.callbacks.TerminateOnNaN()]
+optimizer = optimizers.SGD(lr = lrate, decay=decay, momentum = momentum, nesterov = nesterov)
 
 
 class Autoencoder(object):
 	
-	def __init__(self,input_data, output_data,test_input, test_output, batch_size = batch_size, dropout = dropout, verbose = verbose, architecture = architecture, activation = activation, padding = padding, optimizer = optimizer, epochs = epochs, loss=loss):
+	def __init__(self,input_data, output_data,test_input, test_output, batch_size = batch_size, dropout = dropout,
+				 verbose = verbose, activation = activation, padding = padding,
+				 optimizer = optimizer, epochs = epochs, loss=loss, model=None):
 
 		#init our paramaters
 		self.input_data = input_data
@@ -50,18 +46,12 @@ class Autoencoder(object):
 		self.optimizer = optimizer
 		self.epochs = epochs
 		self.loss = loss
-		#assert self.shape == output_data.shape, 'input and output data do not have the same shape'
+		self.model = model
 
-		if architecture is not None:
-			# initialise and set it up, but we've not impleneted it yet
-			raise NotImplementedError
-			pass
-		if architecture is None:
-			
+		input_shape = self.input_data.shape[1:]
+		input_img = Input(shape=(input_shape))
 
-			input_shape = self.input_data.shape[1:]
-			input_img = Input(shape=(input_shape))
-
+		if self.model == None:
 			x = Conv2D(16, (3, 3), activation=self.activation, padding=self.padding)(input_img)
 			if verbose:
 				print x.shape
@@ -101,35 +91,20 @@ class Autoencoder(object):
 			decoded = Conv2D(1, (3, 3), activation='sigmoid', padding=self.padding)(x)
 			if verbose:
 				print decoded.shape
-			
-			if gestalt:
-				#sh = self.output_data.shape
-				#final = Dense(20, activation='sigmoid')(decoded)
-				#final = Reshape((sh[1], sh[2], sh[3]))(decoded)
-				print decoded.shape
-				dec = decoded.shape
-				print dec
-				final = Permute((1,3,2))(decoded)
-				print final.shape
-				final = Dense(20, activation='sigmoid')(final)
-				print final.shape
-				final = Permute((1,3,2))(final)
-				print final.shape
-				#if verbose:
-				#	print final.shape
 
 			self.model = Model(input_img, decoded)
-			if gestalt:
-				self.model = Model(input_img, final)
 			print self.model.summary()
+			self.model.compile(optimizer = self.optimizer, loss = self.loss)
+		else:
 			self.model.compile(optimizer = self.optimizer, loss = self.loss)
 
 
-	def train(self, epochs = None, shuffle=True, callbacks = default_callbacks, get_weights=False):
+	def train(self, epochs = None, shuffle=True, callback = None, get_weights=False):
 		if epochs is None:
 			epochs = self.epochs
 		print "Model training:"
-		history = self.model.fit(self.input_data, self.output_data, epochs=epochs, shuffle = shuffle, callbacks = callback, validation_split=0.08)
+		history = self.model.fit(self.input_data, self.output_data, epochs=epochs, shuffle = shuffle,
+								 callbacks = callback, validation_split=0.08, batch_size=batch_size)
 		print "Training complete"
 		if get_weights:
 			weights, biases= self.model.layers[-2].get_weights()
@@ -150,21 +125,23 @@ class Autoencoder(object):
 		if inputs is None:
 			inputs = self.test_output
 
-		shape = preds.shape[1:]
+		shape = preds.shape[1:3]
+
 			
 		fig = plt.figure(figsize=(20,4))
+		r = map(lambda x: int(math.ceil(x)), np.random.rand(N) * len(inputs))
 		for i in range(N):
 			#display original
 			ax = plt.subplot(2,N,i+1)
-			plt.imshow(inputs[start + i].reshape(shape))
+			plt.imshow(inputs[r[i]].reshape(shape))
 			plt.gray()
 			plt.title('original')
 			ax.get_xaxis().set_visible(False)
 			ax.get_yaxis().set_visible(False)
 
-			#display reconstructoin
+			#display reconstruction
 			ax = plt.subplot(2, N, i+1+N)
-			plt.imshow(preds[start + i].reshape(shape))
+			plt.imshow(preds[r[i]].reshape(shape))
 			plt.gray()
 			plt.title('reconstruction')
 			ax.get_xaxis().set_visible(False)
@@ -182,14 +159,14 @@ class Autoencoder(object):
 		maps = np.absolute(predictions - self.test_output)
 		assert input_data.shape == predictions.shape, 'predictions and input data must have same dimensions'
 		shape = predictions.shape
-
+		print(shape)
 		if return_preds:
 			return predictions, np.reshape(maps,(shape[0], shape[1], shape[2]))
 		return np.reshape(maps, (shape[0], shape[1], shape[2]))
 
 	def plot_error_maps(self, error_maps = None, N = 10, original_images = None, predictions = None):
 		if error_maps is None:
-			error_maps = get_error_maps()
+			error_maps = self.get_error_maps()
 		if original_images is None:
 			shape = self.test_input.shape
 			original_images = np.reshape(self.test_output, (shape[0], shape[1], shape[2]))
@@ -219,3 +196,4 @@ class Autoencoder(object):
 		if N == -1:
 			N = len(mean_maps)
 		self.plot_error_maps(mean_maps, N)
+

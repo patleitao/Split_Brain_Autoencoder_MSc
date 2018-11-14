@@ -133,41 +133,51 @@ def save_images_per_directory(rootdir, crop_size = default_size, mode='RGB', sav
 		total_list = []
 	for subdir, dirs, files in os.walk(rootdir):
 		filelist = []
-		
-		for file in files:
-			filename = os.path.basename(file)
-			if file.endswith(".jpg") or file.endswith(".jpeg"):
-				if crop_size is not None:
-					#print subdir
-					print filename
-					img = imresize(imread(subdir + '/' + filename, mode=mode), crop_size)
-				if crop_size is None:
-					img = imread(filename, mode=mode)
-				filelist.append(img)
+		if 'testSet' not in subdir and 'Output' not in subdir:
+			for file in files:
+				filename = os.path.basename(file)
+				if file.endswith(".jpg") or file.endswith(".jpeg"):
+					if crop_size is not None:
+						print (subdir + '/' + filename)
+						img = imresize(imread(subdir + '/' + filename, mode=mode), crop_size)
+					if crop_size is None:
+						img = imread(filename, mode=mode)
+					filelist.append(img)
+			filelist = np.array(filelist)
 
 		splits = subdir.split("/")
-		#get the last split
-		name = splits[-1]
-		if name=="":
-			name = splits[0]
-		name = name + "_images"
-		if len(dirs) == 0:
-			name = splits[-2]
-			name = name + "_output"
-			#name = "_output"
-		filelist = np.array(filelist)
-		if save:
-			print name
-			#print filelist.shape
-			save_array(filelist,save_dir + name)
-			print "SAVED: " + name
-			#print save_dir+name
-		if not save:
-			total_list.append(filelist)
-			print "PROCESSED: " + name
-	if not save:
-		total_list = np.array(total_list)
-		return total_list
+		if len(splits) > 2:
+			if 'FIXATIONMAPS' == splits[-2]:
+				name = splits[-1] + "_fixations"
+				save_array(filelist, save_dir + name)
+			elif 'trainSet/Stimuli' in subdir:
+				name = splits[-1] + "_images"
+				save_array(filelist, save_dir + name)
+
+
+	# 	splits = subdir.split("/")
+	# 	#get the last split
+	# 	name = splits[-1]
+	# 	if name=="":
+	# 		name = splits[0]
+	# 	name = name + "_images"
+	# 	if len(dirs) == 0:
+	# 		name = splits[-2]
+	# 		name = name + "_output"
+	# 		#name = "_output"
+	# 	filelist = np.array(filelist)
+	# 	if save:
+	# 		print name
+	# 		#print filelist.shape
+	# 		save_array(filelist,save_dir + name)
+	# 		print "SAVED: " + name
+	# 		#print save_dir+name
+	# 	if not save:
+	# 		total_list.append(filelist)
+	# 		print "PROCESSED: " + name
+	# if not save:
+	# 	total_list = np.array(total_list)
+	# 	return total_list
 		
 
 def combine_arrays_into_one(rootdir, save=True, add_name="combined", make_dir_name='', verbose=True):
@@ -186,43 +196,37 @@ def combine_arrays_into_one(rootdir, save=True, add_name="combined", make_dir_na
 		
 	for subdir, dirs, files in os.walk(rootdir):
 		img_arr = []
-		out_arr = []
 		fix_arr = []
 		for file in files:
 			filename = os.path.basename(file)
 			if '.' not in filename:
 				if verbose:
 					print "combined: " + str(rootdir+'/'+filename)
-				arr = load(rootdir + '/' + filename)
+				arr = load_array(rootdir + '/' + filename)
 				img_cat, img_type = filename.split('_')
-				if img_type == 'images' and arr.size != 0 and 'FIXATION' not in img_cat:
+				if img_type == 'images' and len(arr) != 0 and 'FIXATION' not in img_cat:
 					img_arr.append(arr)
 					if verbose:
 						print "added to images"
-				if img_type == 'output' and arr.size != 0 and 'FIXATION' not in img_cat:
-					out_arr.append(arr)
-					if verbose:
-						print "added to outputs"
-				if 'FIXATION' in img_cat and arr.size != 0:
+				if img_type == 'fixations' and len(arr) != 0:
 					fix_arr.append(arr)
+					if verbose:
+						print "added to fixations"
 		img_arr = np.concatenate(img_arr)
-		out_arr = np.concatenate(out_arr)
 		fix_arr = np.concatenate(fix_arr)
 
 		if verbose:
 			print "images shape" + str(img_arr.shape)
-			print "outputs shape" + str(out_arr.shape)
+			print "fixations shape" + str(fix_arr.shape)
 		if save:
 			if make_dir_name == '':
 				save_array(img_arr, rootdir + '/' + 'images_'+ add_name)
-				save_array(out_arr, rootdir + '/' + 'outputs_'+ add_name)
 				save_array(fix_arr, rootdir + '/' + 'fix_'+ add_name)
 			
 			if make_dir_name !='':
 				save_array(img_arr, rootdir + make_dir_name + '/' + 'images_' + add_name)
-				save_array(out_arr, rootdir + make_dir_name + '/' + 'outputs_' + add_name)
 				save_array(fix_arr, rootdir + make_dir_name + '/' + 'fix_' + add_name)
-		return img_arr, out_arr, fix_arr
+		return img_arr, fix_arr
 
 
 def read_image(num, dirnme = dirname, mode='RGB'):
